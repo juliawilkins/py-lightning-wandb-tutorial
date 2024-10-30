@@ -10,13 +10,14 @@ class AudioSpectrogramDataset(Dataset):
         self.audio_paths = dataframe['filename'].tolist()
         self.labels = dataframe['target'].tolist()
         self.transform = transform
+        self.sr = 16000
     
-    def toMelSpectrogram(self, waveform, sample_rate):
+    def to_mel_spec(self, waveform, sample_rate):
         spectrogram = Ta.MelSpectrogram(
                 sample_rate=sample_rate,
-                n_fft=512,
-                hop_length=239,
-                n_mels=50,
+                n_fft=2048,
+                hop_length=512,
+                n_mels=128,
                 normalized=True
             )(waveform)
         return spectrogram
@@ -28,8 +29,9 @@ class AudioSpectrogramDataset(Dataset):
         audio_path = self.audio_paths[idx]
         label = self.labels[idx]
 
-        waveform, sample_rate = torchaudio.load(os.path.join(self.data_dir, audio_path))
-        spectrogram = self.toMelSpectrogram(waveform, sample_rate)  # Adjusted to use actual sample rate
+        waveform, curr_sr = torchaudio.load(os.path.join(self.data_dir, audio_path))
+        waveform = torchaudio.functional.resample(waveform, curr_sr, self.sr)
+        spectrogram = self.to_mel_spec(waveform, self.sr)  # Adjusted to use actual sample rate
 
         if self.transform:
             spectrogram = self.transform(spectrogram)
