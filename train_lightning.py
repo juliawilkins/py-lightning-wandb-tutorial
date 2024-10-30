@@ -14,37 +14,20 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from data import AudioSpectrogramDataset
-
+from model import SimpleCNN
 
 class PLSimpleCNN(L.LightningModule):
     def __init__(self, params):
         super().__init__()
         self.params = params
-        # Define model architecture  in init
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1)  # Input shape: [batch_size, 1, 128, 1103]
-        self.act1 = nn.ReLU()
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)  # Output shape: [batch_size, 16, 64, 551]
-
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)  # Output shape: [batch_size, 32, 32, 275]
-        self.act2 = nn.ReLU()
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)  # Output shape: [batch_size, 32, 16, 137] -- Approximation
-
-        # Update the input size of fc1 to match the flattened output size: 32 channels * 12 height * 230 width
-        self.fc1 = nn.Linear(88320, 100)  # Corrected input features to match actual output
-        self.act3 = nn.ReLU()
-        self.fc2 = nn.Linear(100, params['N_CLASSES'])  # Output classes 50 for ESC50
-
-        # Loss function definition
+        # Initialize model from other file
+        self.model = SimpleCNN(params)
         self.loss_fn = nn.CrossEntropyLoss()
 
-
     def forward(self, x):
-        x = self.pool1(self.act1(self.conv1(x)))
-        x = self.pool2(self.act2(self.conv2(x)))
-        x = torch.flatten(x, 1)  # Flatten the tensor for the fully connected layer
-        x = self.act3(self.fc1(x))
-        x = self.fc2(x)
-        return x
+        output = self.model(x)
+        # Can add extra layers here too
+        return output
     
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.params['LEARNING_RATE'])
@@ -80,6 +63,16 @@ class PLSimpleCNN(L.LightningModule):
         # Set to only log at end of epoch
         self.log('val_loss_epoch', loss,  prog_bar=True, on_step=False, on_epoch=True)
         return loss 
+    
+    def test_step(self, batch, batch_idx):
+        # Model is automatically in eval mode here 
+        data, target = batch 
+        output = self(data) # self(data) calls forward() function here
+
+        # Easy logging here for training step
+        # Set to only log at end of epoch
+        # self.log('val_loss_epoch', loss,  prog_bar=True, on_step=False, on_epoch=True)
+        # return loss 
 
 
 
@@ -92,6 +85,7 @@ def main():
     PARAMS = {
         'RANDOM_STATE': 42,
         'TEST_SIZE': 0.2,
+        'VAL_SIZE': 0.2,
         'BATCH_SIZE': 64,
         'LEARNING_RATE': 0.01,
         'N_EPOCHS': 2,
@@ -109,12 +103,21 @@ def main():
     # Split the data into training and testing sets
     train_df, test_df = train_test_split(data, test_size=PARAMS['TEST_SIZE'],
                                           random_state=PARAMS['RANDOM_STATE'])
+    train_df, val_df = train_test_split(train_df, test_size=PARAMS['VAL_SIZE'],
+                                          random_state=PARAMS['RANDOM_STATE'])
+
     train_loader = DataLoader(AudioSpectrogramDataset(DATA_DIR, train_df),
                                batch_size=PARAMS['BATCH_SIZE'], 
-                               shuffle=True, num_workers=PARAMS['N_WORKERS'])
+                               shuffle=True, num_workers=PARAMS['N_WORKERS'],
+                               persistent_workers=True)
+    val_loader = DataLoader(AudioSpectrogramDataset(DATA_DIR,val_df),
+                              batch_size=PARAMS['BATCH_SIZE'], 
+                              shuffle=False, num_workers=PARAMS['N_WORKERS'],
+                              persistent_workers=True)
     test_loader = DataLoader(AudioSpectrogramDataset(DATA_DIR,test_df),
                               batch_size=PARAMS['BATCH_SIZE'], 
-                              shuffle=False, num_workers=PARAMS['N_WORKERS'])
+                              shuffle=False, num_workers=PARAMS['N_WORKERS'],
+                              persistent_workers=True)
 
     # Initialize the model
     model = PLSimpleCNN(PARAMS)
@@ -137,12 +140,15 @@ def main():
         accelerator="auto",
         log_every_n_steps=1,
     )
+    # Training and validation loops under the hood
     trainer.fit(
         model=model,
         train_dataloaders=train_loader,
-        val_dataloaders=test_loader,
+        val_dataloaders=val_loader,
     )
 
+    # Test loop
+    trainer.test(dataloaders=test_loader, ckpt_path='best', verbose=True)
 
 
 if __name__ == '__main__':
@@ -150,7 +156,7 @@ if __name__ == '__main__':
 
     
 
-
+# TODO add more customized verison
 #  trainer = L.Trainer(
 #         logger=logger,
 #         callbacks=[
