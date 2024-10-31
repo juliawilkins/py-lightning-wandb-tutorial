@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
@@ -33,17 +34,17 @@ def train(model, device, train_loader, optimizer, criterion, epoch, train_len):
                                 'batch': batch_idx,
                                 'loss': round(loss.item(), 4),
                                 'acc': round(train_accuracy, 4)})
-        print(f'Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)} ({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f} Accuracy: {train_correct}/{test_len} ({train_accuracy:.0f}%)\n')
+        print(f'Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)} ({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f} Accuracy: {train_correct}/{train_len} ({train_accuracy:.0f}%)\n')
         
     return train_results
 
-def test(model, device, val_loader, criterion, epoch, val_len):
+def test(model, device, test_loader, criterion, epoch, test_len, mode='val'):
     model.eval()
     val_loss = 0
     correct = 0
 
     with torch.no_grad():
-        for data, target in val_loader:
+        for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
             loss = criterion(output, target).item()
@@ -51,17 +52,26 @@ def test(model, device, val_loader, criterion, epoch, val_len):
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
-    average_loss = val_loss / val_len
-    accuracy = 100. * correct / val_len
-    print(f'\nValidation set: Average loss: {average_loss:.4f}, Accuracy: {correct}/{val_len} ({accuracy:.0f}%)\n')
+    average_loss = val_loss / test_len
+    accuracy = 100. * correct / test_len
+    if mode == 'val':
+        print(f'\nValidation set: Average loss: {average_loss:.4f}, Accuracy: {correct}/{test_len} ({accuracy:.0f}%)\n')
+        # Prepare the val results summary
+        val_results_summary = {
+            'epoch': epoch,
+            'correct_predictions': correct,
+            'average_loss': round(average_loss, 4),
+            'accuracy': accuracy
+        }
+    elif mode == 'test':
+        print(f'\nTest set: Average loss: {average_loss:.4f}, Accuracy: {correct}/{test_len} ({accuracy:.0f}%)\n')
+        # Prepare the test results summary
+        val_results_summary = {
+            'correct_predictions': correct,
+            'average_loss': round(average_loss, 4),
+            'accuracy': accuracy
+        }
 
-    # Prepare the test results summary
-    val_results_summary = {
-        'epoch': epoch,
-        'correct_predictions': correct,
-        'average_loss': round(average_loss, 4),
-        'accuracy': accuracy
-    }
     return val_results_summary
     
 
@@ -69,10 +79,16 @@ def main():
     # Load CSV file and prepare the dataset
     DATA_DIR = 'ESC-50-master/audio'
     CSV_PATH = 'ESC-50-master/meta/esc50.csv' 
-    TRAIN_LOG_PATH = 'train_results.csv'
-    VAL_LOG_PATH = 'val_results.csv'
-    TEST_LOG_PATH = 'test_results.csv'
+    
+    LOGS_DIR = 'logs'
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    
+    TRAIN_LOG_PATH = 'logs/train_results.csv'
+    VAL_LOG_PATH = 'logs/val_results.csv'
+    TEST_LOG_PATH = 'logs/test_results.csv'
 
+    MODEL_CKPTS_DIR = 'trained_models'
+    os.makedirs(MODEL_CKPTS_DIR, exist_ok=True)
     
      # Set up parameters
     PARAMS = {
@@ -84,7 +100,7 @@ def main():
         'N_EPOCHS': 2,
         'N_CLASSES': 50 
         }
-    print("HYPERPARAMERS: ", PARAMS)
+    print("HYPERPARAMERS: ", PARAMS, "\n")
 
     # Load data
     df = pd.read_csv(CSV_PATH)
@@ -100,7 +116,8 @@ def main():
     test_len = len(test_df)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SimpleCNN(PARAMS['N_CLASSES']).to(device)
+    # model = SimpleCNN(PARAMS['N_CLASSES']).to(device) # Bug to change
+    model = SimpleCNN(PARAMS).to(device)
     optimizer = optim.Adam(model.parameters(), lr=PARAMS['LEARNING_RATE'])
     criterion = nn.CrossEntropyLoss()
 
@@ -122,11 +139,11 @@ def main():
         all_train_results.extend(epoch_train_results)
 
         # ----- Validation loop -------
-        epoch_val_summary = test(model, device, val_loader, criterion, epoch, val_len)
+        epoch_val_summary = test(model, device, val_loader, criterion, epoch, val_len, mode='val')
         all_val_results.append(epoch_val_summary)
 
         # Save the model (set up for latest epoch only)
-        MODEL_OUT_PATH = f"trained_models/esc_classifier_ep{epoch}.pt"
+        MODEL_OUT_PATH = f"{MODEL_CKPTS_DIR}/esc_classifier_ep{epoch}.pt"
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
@@ -141,8 +158,8 @@ def main():
             # torch.save ....
         
     # ---- TEST LOOP ONCE AT END -----
-    
-    epoch_test_summary = test(model, device, test_loader, criterion, epoch)
+    print(' ---------------------------------------------------- ')
+    epoch_test_summary = test(model, device, test_loader, criterion, epoch, test_len, mode='test')
     all_test_results.append(epoch_test_summary)
 
     # Convert results to DataFrame and write to CSV

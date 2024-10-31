@@ -39,12 +39,12 @@ def train(model, device, train_loader, optimizer, criterion, epoch, train_len):
     
     return {'epoch': epoch, 'Train_loss_epoch': train_loss_epoch / train_len, 'Train_accuracy_epoch': train_accuracy_epoch / train_len}
     
-def test(model, device, val_loader, criterion, epoch, val_len):
+def test(model, device, test_loader, criterion, epoch, test_len, mode='val'):
     model.eval()
     val_loss = 0
     correct = 0
     with torch.no_grad():
-        for data, target in val_loader:
+        for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
             loss = criterion(output, target).item()
@@ -52,14 +52,20 @@ def test(model, device, val_loader, criterion, epoch, val_len):
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
-    average_loss = val_loss / val_len
-    accuracy = 100. * correct / val_len
+    average_loss = val_loss / test_len
+    accuracy = 100. * correct / test_len
 
-    # Log epoch metrics to wandb
-    wandb.log({'val_loss': average_loss, 'epoch': epoch})
-
-    print(f'\nValidation set: Average loss: {average_loss:.4f}, Accuracy: {correct}/{val_len} ({accuracy:.0f}%)\n')
-    return {'epoch': epoch, 'val_loss': average_loss, 'val_accuracy': accuracy}
+    if mode == 'val':
+        print(f'\nValidation set: Average loss: {average_loss:.4f}, Accuracy: {correct}/{test_len} ({accuracy:.0f}%)\n')
+        # Log epoch metrics to wandb
+        wandb.log({'val_loss': average_loss, 'epoch': epoch})
+        return {'epoch': epoch, 'val_loss': average_loss, 'val_accuracy': accuracy}        
+        
+    elif mode == 'test':
+        print(f'\nTest set: Average loss: {average_loss:.4f}, Accuracy: {correct}/{test_len} ({accuracy:.0f}%)\n')
+        # Log epoch metrics to wandb
+        wandb.log({'test_loss': average_loss})
+        return {'test_loss': average_loss, 'test_accuracy': accuracy}
 
 def main():
     # Initialize wandb
@@ -69,7 +75,7 @@ def main():
         'TEST_SIZE': 0.2,
         'BATCH_SIZE': 64,
         'LEARNING_RATE': 0.0001,
-        'N_EPOCHS': 10,
+        'N_EPOCHS': 2,
         'N_CLASSES': 50 
     })
     config = wandb.config
@@ -77,7 +83,9 @@ def main():
     # Load data and prepare dataset
     DATA_DIR = 'ESC-50-master/audio'
     CSV_PATH = 'ESC-50-master/meta/esc50.csv'
-    OUT_DIR = 'trained_models'
+    
+    MODEL_CKPTS_DIR = 'trained_models'
+    os.makedirs(MODEL_CKPTS_DIR, exist_ok=True)
     
     df = pd.read_csv(CSV_PATH)
     data = df[['filename', 'target']]
@@ -86,7 +94,7 @@ def main():
     train_df, val_df = train_test_split(train_df, test_size=config.VAL_SIZE, random_state=config.RANDOM_STATE)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SimpleCNN(config.N_CLASSES).to(device)
+    model = SimpleCNN(config).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.LEARNING_RATE)
     criterion = nn.CrossEntropyLoss()
 
@@ -96,15 +104,14 @@ def main():
 
     for epoch in range(1, config.N_EPOCHS + 1):
         train_results = train(model, device, train_loader, optimizer, criterion, epoch, len(train_df))
-        val_results = test(model, device, val_loader, criterion, epoch, len(val_df))
+        val_results = test(model, device, val_loader, criterion, epoch, len(val_df), mode='val')
         
         # Log results per epoch to wandb
         wandb.log(train_results)
         wandb.log(val_results)
         
         # Save the model (set up for latest epoch only)
-        os.makedirs(OUT_DIR, exist_ok=True)
-        MODEL_OUT_PATH = f"{OUT_DIR}/esc_classifier_ep{epoch}.pt"
+        MODEL_OUT_PATH = f"{MODEL_CKPTS_DIR}/esc_classifier_ep{epoch}.pt"
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
@@ -117,6 +124,9 @@ def main():
         artifact = wandb.Artifact('model', type='model')
         artifact.add_file(MODEL_OUT_PATH)
         wandb.log_artifact(artifact)
+    
+    test_results = test(model, device, test_loader, criterion, epoch, len(test_df), mode='test')
+    wandb.log(test_results)
 
 if __name__ == '__main__':
     main()

@@ -1,3 +1,4 @@
+import os
 import lightning as L
 from lightning.pytorch.callbacks import (
     EarlyStopping,
@@ -91,7 +92,8 @@ class PLSimpleCNN(L.LightningModule):
 def main():
     DATA_DIR = 'ESC-50-master/audio'
     CSV_PATH = 'ESC-50-master/meta/esc50.csv' 
-    MODEL_OUT_DIR = "trained_models"
+    MODEL_CKPTS_DIR = "trained_models"
+    os.makedirs(MODEL_CKPTS_DIR, exist_ok=True)
     
     # Set up parameters
     PARAMS = {
@@ -138,7 +140,7 @@ def main():
 
     # Initialize weights and biases logger
     logger = WandbLogger(
-            project="esc50-classifier",
+            project="PL_WANDB_Tutorial",
         )
     # Log the parameters dictionary to weights and biases
     logger.log_hyperparams(PARAMS) 
@@ -153,7 +155,7 @@ def main():
         log_every_n_steps=1,
         callbacks=[
             ModelCheckpoint(
-                dirpath=MODEL_OUT_DIR,
+                dirpath=MODEL_CKPTS_DIR,
                 filename="esc-classification",
                 monitor="val_acc_epoch",
                 auto_insert_metric_name=True,
@@ -171,7 +173,7 @@ def main():
     # Test loop
     trainer.test(model=model, 
                  dataloaders=test_loader,
-                 ckpt_path="trained_models/esc-classification.ckpt",
+                 ckpt_path=f"{MODEL_CKPTS_DIR}/esc-classification.ckpt",
                  verbose=True)
 
 
