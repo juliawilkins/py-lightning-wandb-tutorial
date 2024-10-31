@@ -116,7 +116,6 @@ def main():
     test_len = len(test_df)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # model = SimpleCNN(PARAMS['N_CLASSES']).to(device) # Bug to change
     model = SimpleCNN(PARAMS).to(device)
     optimizer = optim.Adam(model.parameters(), lr=PARAMS['LEARNING_RATE'])
     criterion = nn.CrossEntropyLoss()
