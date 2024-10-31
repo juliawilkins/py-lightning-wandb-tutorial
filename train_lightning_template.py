@@ -109,6 +109,7 @@ def main():
     train_df, val_df = train_test_split(train_df, test_size=PARAMS['VAL_SIZE'],
                                           random_state=PARAMS['RANDOM_STATE'])
 
+    # Initialize dataloader
     train_loader = DataLoader(AudioSpectrogramDataset(DATA_DIR, train_df),
                                batch_size=PARAMS['BATCH_SIZE'], 
                                shuffle=True, num_workers=PARAMS['N_WORKERS'],
