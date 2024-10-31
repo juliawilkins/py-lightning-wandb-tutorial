@@ -62,7 +62,7 @@ def test(model, device, val_loader, criterion, epoch, val_len):
         'average_loss': round(average_loss, 4),
         'accuracy': accuracy
     }
-    return test_results_summary
+    return val_results_summary
     
 
 def main():
@@ -78,7 +78,7 @@ def main():
     PARAMS = {
         'RANDOM_STATE': 42,
         'TEST_SIZE': 0.2,
-        'VAL_SIZE': 0.2,
+        'VAL_SIZE': 0.25,
         'BATCH_SIZE': 64,
         'LEARNING_RATE': 0.01,
         'N_EPOCHS': 2,

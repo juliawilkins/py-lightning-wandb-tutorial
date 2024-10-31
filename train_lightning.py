@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-
+from torchmetrics import Accuracy
 from data import AudioSpectrogramDataset
 from model import SimpleCNN
 
@@ -23,7 +23,8 @@ class PLSimpleCNN(L.LightningModule):
         # Initialize model from other file
         self.model = SimpleCNN(params)
         self.loss_fn = nn.CrossEntropyLoss()
-
+        self.accuracy_metric = Accuracy(task="multiclass", num_classes=params["N_CLASSES"])
+    
     def forward(self, x):
         output = self.model(x)
         # Can add extra layers here too
@@ -50,6 +51,10 @@ class PLSimpleCNN(L.LightningModule):
         # if batch_idx == 10:
         #     plt.plot(dummyplot)
         
+        # Accuracy per epoch
+        preds = output.argmax(dim=1)
+        acc = self.accuracy_metric(preds, target)
+        self.log('train_acc_epoch', acc, on_step=False, on_epoch=True)
         return loss 
 
 
@@ -62,6 +67,10 @@ class PLSimpleCNN(L.LightningModule):
         # Easy logging here for training step
         # Set to only log at end of epoch
         self.log('val_loss_epoch', loss,  prog_bar=True, on_step=False, on_epoch=True)
+        
+        preds = output.argmax(dim=1)
+        acc = self.accuracy_metric(preds, target)
+        self.log('val_acc_epoch', acc, on_step=False, on_epoch=True)
         return loss 
     
     def test_step(self, batch, batch_idx):
@@ -69,6 +78,9 @@ class PLSimpleCNN(L.LightningModule):
         data, target = batch 
         output = self(data) # self(data) calls forward() function here
 
+        preds = output.argmax(dim=1)
+        acc = self.accuracy_metric(preds, target)
+        self.log('test_acc', acc, on_epoch=True)
         # Easy logging here for training step
         # Set to only log at end of epoch
         # self.log('val_loss_epoch', loss,  prog_bar=True, on_step=False, on_epoch=True)
@@ -79,16 +91,16 @@ class PLSimpleCNN(L.LightningModule):
 def main():
     DATA_DIR = 'ESC-50-master/audio'
     CSV_PATH = 'ESC-50-master/meta/esc50.csv' 
-    MODEL_OUT_PATH = "trained_models/esc_classifier.pt"
+    MODEL_OUT_DIR = "trained_models"
     
     # Set up parameters
     PARAMS = {
         'RANDOM_STATE': 42,
         'TEST_SIZE': 0.2,
-        'VAL_SIZE': 0.2,
+        'VAL_SIZE': 0.25,
         'BATCH_SIZE': 64,
-        'LEARNING_RATE': 0.01,
-        'N_EPOCHS': 2,
+        'LEARNING_RATE': 0.001,
+        'N_EPOCHS': 100,
         'NUM_GPUS': 1 if torch.cuda.is_available() else "cpu",
         'N_CLASSES': 50,
         'N_WORKERS': 2
@@ -100,7 +112,7 @@ def main():
     df = pd.read_csv(CSV_PATH)
     data = df[['filename', 'target']]
 
-    # Split the data into training and testing sets
+    # Split the data into training and testing sets (60/20/20)
     train_df, test_df = train_test_split(data, test_size=PARAMS['TEST_SIZE'],
                                           random_state=PARAMS['RANDOM_STATE'])
     train_df, val_df = train_test_split(train_df, test_size=PARAMS['VAL_SIZE'],
@@ -139,7 +151,16 @@ def main():
         devices="auto",
         accelerator="auto",
         log_every_n_steps=1,
-    )
+        callbacks=[
+            ModelCheckpoint(
+                dirpath=MODEL_OUT_DIR,
+                filename="esc-classification",
+                monitor="val_acc_epoch",
+                auto_insert_metric_name=True,
+                save_top_k=1 # save top two best models for this criteron
+            ),
+        ],
+        )
     # Training and validation loops under the hood
     trainer.fit(
         model=model,
@@ -148,64 +169,11 @@ def main():
     )
 
     # Test loop
-    trainer.test(dataloaders=test_loader, ckpt_path='best', verbose=True)
+    trainer.test(model=model, 
+                 dataloaders=test_loader,
+                 ckpt_path="trained_models/esc-classification.ckpt",
+                 verbose=True)
 
 
 if __name__ == '__main__':
     main()
-
-    
-
-# TODO add more customized verison
-#  trainer = L.Trainer(
-#         logger=logger,
-#         callbacks=[
-#             ModelCheckpoint(
-#                 dirpath=MODEL_OUT_PATH,
-#                 monitor="val_loss",
-#                 auto_insert_metric_name=True,
-#                 save_top_k=2, # save top two best models for this criteron
-#             ),
-#         ],
-#         devices=PARAMS["num_gpus"],
-#         accelerator="gpu" if params["num_gpus"] > 0 else "cpu",
-#         max_epochs=params["max_epochs"],
-#         log_every_n_steps=1,
-#         # limit_val_batches=0,
-#         val_check_interval=0.5,
-#         precision="bf16-mixed",
-#         # ckpt_path="multi-disentanglement-specvq-videovq/e1sfaxy4/checkpoints/epoch=177-step=9968.ckpt",
-#     )
-
-#     # More customized version with callbacks
-#     trainer = L.Trainer(
-#         logger=logger,
-#         callbacks=[
-#             EarlyStopping(
-#                 monitor="val_loss_total_step_epoch",
-#                 patience=params["early_stopping_patience"],
-#                 verbose=True,
-#             ),
-#             ModelCheckpoint(
-#                 dirpath=save_model_dir,
-#                 filename="{epoch}-{step}-{train_loss_total_step:.3f}-{val_loss_total_step:.3f}",
-#                 monitor="val_loss_total_step",
-#                 auto_insert_metric_name=True,
-#                 save_top_k=5,
-#             ),
-#         ],
-#         devices=params["num_gpus"],
-#         strategy=(
-#             # DDPStrategy(find_unused_parameters=False)
-#             "ddp"
-#             if params["num_gpus"] > 1
-#             else "auto"
-#         ),
-#         accelerator="gpu" if params["num_gpus"] > 0 else "cpu",
-#         max_epochs=params["max_epochs"],
-#         log_every_n_steps=1,
-#         # limit_val_batches=0,
-#         val_check_interval=0.5,
-#         precision="bf16-mixed",
-#         # ckpt_path="multi-disentanglement-specvq-videovq/e1sfaxy4/checkpoints/epoch=177-step=9968.ckpt",
-#     )

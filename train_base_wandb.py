@@ -65,8 +65,8 @@ def main():
     # Initialize wandb
     wandb.init(project='PL_WANDB_Tutorial', config={
         'RANDOM_STATE': 42,
+        'VAL_SIZE': 0.25,
         'TEST_SIZE': 0.2,
-        'VAL_SIZE': 0.2,
         'BATCH_SIZE': 64,
         'LEARNING_RATE': 0.0001,
         'N_EPOCHS': 10,
@@ -81,6 +81,7 @@ def main():
     
     df = pd.read_csv(CSV_PATH)
     data = df[['filename', 'target']]
+    # this gets 60/20/20 split
     train_df, test_df = train_test_split(data, test_size=config.TEST_SIZE, random_state=config.RANDOM_STATE)
     train_df, val_df = train_test_split(train_df, test_size=config.VAL_SIZE, random_state=config.RANDOM_STATE)
 
@@ -91,6 +92,7 @@ def main():
 
     train_loader = DataLoader(AudioSpectrogramDataset(DATA_DIR, train_df), batch_size=config.BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(AudioSpectrogramDataset(DATA_DIR, val_df), batch_size=config.BATCH_SIZE, shuffle=False)
+    test_loader = DataLoader(AudioSpectrogramDataset(DATA_DIR, test_df), batch_size=config.BATCH_SIZE, shuffle=False)
 
     for epoch in range(1, config.N_EPOCHS + 1):
         train_results = train(model, device, train_loader, optimizer, criterion, epoch, len(train_df))
