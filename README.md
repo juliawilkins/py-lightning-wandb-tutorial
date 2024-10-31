@@ -11,10 +11,10 @@
 
 ## Index
 - [Agenda](#agenda)
-- [Why PyTorch Lightning](#why_pytorch_lightning)
-- [Why Weights & Biases](#why_weights_and_biases)
-- [Installation and Getting Started](#installation_and_getting_started)
-- [Lab Template Project](#lab_template)
+- [Why PyTorch Lightning](#why-pytorch-lightning)
+- [Why Weights & Biases](#why-weights--biases)
+- [Installation and Getting Started](#installation-and-getting-started)
+- [Lab Template Project](#lab-template-project)
 - [References](#references)
 
 *****************
