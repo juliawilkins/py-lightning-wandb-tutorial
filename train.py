@@ -127,10 +127,8 @@ def main():
 
     all_train_results = []
     all_val_results = []
-
     all_test_results = []
 
-    
     for epoch in range(1, PARAMS['N_EPOCHS']+1):
 
         # ----- Training loop -------
