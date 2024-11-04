@@ -10,26 +10,12 @@
 *****************
 
 ## Index
-- [Agenda](#agenda)
 - [Why PyTorch Lightning](#why-pytorch-lightning)
 - [Why Weights & Biases](#why-weights--biases)
 - [Installation and Getting Started](#installation-and-getting-started)
 - [Lab Template Project](#lab-template-project)
 - [References](#references)
 
-*****************
-
-## Agenda
-
-[10 min] Overview / intro to lightning + wandb
-
-- Brief show original structure of project
-- Weights and biases logging on top of original
-- Lightning + weights and biases
-
-[20-30 min] Lab time: setup + working on template example
-
-[20-30 min] Lab time: porting custom projects to lightning/wandb
 
 *****************
 
