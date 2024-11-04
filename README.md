@@ -1,4 +1,4 @@
-# MARL ML Tutorial: PyTorch Lightning / Weights & Biases (WandB) Tutorial
+# 🐱‍💻 MARL ML Tutorial: PyTorch Lightning / Weights & Biases (WandB) Tutorial ⚡⚡
 
 >  **[Tutorial Page](https://julianotes.notion.site/MARL-ML-Tutorial-PyTorch-Lightning-Weights-Biases-WandB-Tutorial-12d06e9a3217809490cfdcad3ad48614?pvs=4)**  
 > [Julia Wilkins](https://juliawilkins.github.io), [Xavier Juanola](https://xavijuanola.github.io/)
